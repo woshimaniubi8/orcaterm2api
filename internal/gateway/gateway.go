@@ -467,6 +467,11 @@ func (g *Gateway) TestAccount(ctx context.Context, id, model, prompt string) (st
 	if e == nil {
 		return "", errors.New("账号不存在")
 	}
+	// 面板传进来的通常是对外 ID（deepseek-v4.1-flash），必须解析成上游 model（TokenHub/...）。
+	spec, ok := g.Resolve(model)
+	if !ok {
+		return "", &upstream.APIError{Kind: upstream.KindRequest, Message: "model not found: " + model}
+	}
 	a := e.Account()
 	if a.NeedsRefresh(time.Now()) && a.HasRefresh() {
 		if err := g.RefreshAccount(ctx, e); err != nil {
@@ -479,7 +484,8 @@ func (g *Gateway) TestAccount(ctx context.Context, id, model, prompt string) (st
 	}
 	stream, err := g.client.Chat(ctx, &a, upstream.ChatRequest{
 		ConversationID: fmt.Sprintf("cid-%s-%s-test-%s", a.ID, "orcaterm", randomSuffix()),
-		Model:          model,
+		Model:          spec.Upstream,
+		ModelDesc:      thinkingModelDesc(spec, ChatInput{}),
 		Input:          prompt,
 		UserID:         a.ID,
 	})
