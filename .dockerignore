@@ -1,0 +1,13 @@
+.git
+.github
+_re
+_re2
+_strings.txt
+data
+auths
+config.json
+README.md
+docs
+*.exe
+*.log
+*.jsonl

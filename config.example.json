@@ -1,0 +1,144 @@
+{
+  "listen": ":7864",
+  "api_keys": [
+    "sk-orca-change-me"
+  ],
+  "auth_dir": "./auths",
+  "upstream": {
+    "assistant_base": "https://lightai.cloud.tencent.com/assistant",
+    "cgi_base": "https://orcaterm.com/cgi/api",
+    "assistant_name": "orcaterm",
+    "mode": 0,
+    "default_model": "deepseek-v4.1-flash",
+    "product": "orcaterm",
+    "user_agent": "",
+    "timeout_seconds": 300,
+    "header_timeout_seconds": 120,
+    "max_tokens": 0
+  },
+  "models": {
+    "catalog_enabled": true,
+    "catalog_url": "https://dnspod.cloud.tencent.com/ajax/rainbow?action=getRainbowConfig",
+    "catalog_group": "orcaterm.内置模型",
+    "catalog_refresh_minutes": 10,
+    "enabled": [
+      {
+        "id": "deepseek-chat-latest",
+        "upstream": "deepseek-chat-latest",
+        "label": "DeepSeek Chat (latest)",
+        "context_length": 131072
+      },
+      {
+        "id": "deepseek-chat",
+        "upstream": "deepseek-chat",
+        "label": "DeepSeek Chat",
+        "context_length": 131072
+      },
+      {
+        "id": "qwen3",
+        "upstream": "qwen3",
+        "label": "Qwen3",
+        "context_length": 131072
+      },
+      {
+        "id": "kimi-latest",
+        "upstream": "kimi-latest",
+        "label": "Kimi Latest",
+        "context_length": 131072
+      },
+      {
+        "id": "kimi-k2",
+        "upstream": "kimi-k2",
+        "label": "Kimi K2",
+        "context_length": 131072
+      },
+      {
+        "id": "kimi-k2-thinking",
+        "upstream": "kimi-k2-thinking",
+        "label": "Kimi K2 Thinking",
+        "reasoning": true,
+        "context_length": 131072
+      },
+      {
+        "id": "kimi-k2.5",
+        "upstream": "kimi-k2.5",
+        "label": "Kimi K2.5",
+        "reasoning": true,
+        "context_length": 262144
+      },
+      {
+        "id": "kimi-k2.5-thinking",
+        "upstream": "kimi-k2.5-thinking",
+        "label": "Kimi K2.5 Thinking",
+        "reasoning": true,
+        "context_length": 262144
+      },
+      {
+        "id": "hunyuan-t1",
+        "upstream": "hunyuan-t1",
+        "label": "Hunyuan T1",
+        "reasoning": true,
+        "context_length": 131072
+      },
+      {
+        "id": "hunyuan-turbos",
+        "upstream": "hunyuan-turbos",
+        "label": "Hunyuan TurboS",
+        "context_length": 131072
+      },
+      {
+        "id": "glm-4.7",
+        "upstream": "glm-4.7",
+        "label": "GLM-4.7",
+        "context_length": 131072
+      },
+      {
+        "id": "glm-4.7-thinking",
+        "upstream": "glm-4.7-thinking",
+        "label": "GLM-4.7 Thinking",
+        "reasoning": true,
+        "context_length": 131072
+      }
+    ],
+    "aliases": {
+      "gpt-4o": "deepseek-v4.1-flash",
+      "gpt-4o-mini": "deepseek-v4-flash",
+      "claude-3-5-sonnet": "glm-5.3"
+    },
+    "hidden": []
+  },
+  "pool": {
+    "max_in_flight": 2,
+    "max_in_flight_total": 0,
+    "breaker_threshold": 3,
+    "breaker_cooldown": "5m",
+    "soft_cooldown": "3m",
+    "max_cooldown": "30m",
+    "prefer_fresh_token": true,
+    "min_interval": "3s",
+    "max_per_minute": 10
+  },
+  "conversation": {
+    "mode": "stateless",
+    "sticky_ttl": "30m",
+    "max_history_messages": 40,
+    "max_history_chars": 24000,
+    "system_prompt_mode": "prefix"
+  },
+  "logging": {
+    "ring_size": 500,
+    "archive_enabled": true,
+    "archive_file": "./data/requests.jsonl",
+    "include_prompts": false
+  },
+  "panel": {
+    "enabled": true,
+    "path": "/panel",
+    "password": "change-me",
+    "session_ttl": "12h",
+    "local_data_bin": ""
+  }
+}
+
+
+

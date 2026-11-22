@@ -1,0 +1,25 @@
+# 文档暂不进入远端仓库（本地保留）
+/README.md
+/docs/
+
+# 编译产物与运行时数据
+/orcaterm2api
+/orcaterm2api.exe
+/orcaterm2api-*
+/config.json
+/auths/
+/data/
+*.log
+run.out.log
+run.err.log
+*.jsonl
+
+# 逆向/临时分析目录
+/_re/
+/_re2/
+/_strings.txt
+
+# 编辑器
+.idea/
+.vscode/
+.DS_Store

@@ -1,0 +1,178 @@
+// Package reqlog 保存最近请求日志（内存环 + 可选 JSONL 归档）。
+package reqlog
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+)
+
+// Entry 是一条请求记录。
+type Entry struct {
+	ID              string `json:"id"`
+	Time            int64  `json:"time"`
+	Endpoint        string `json:"endpoint"`
+	Method          string `json:"method"`
+	Account         string `json:"account,omitempty"`
+	Model           string `json:"model,omitempty"`
+	UpstreamModel   string `json:"upstream_model,omitempty"`
+	Stream          bool   `json:"stream"`
+	Status          int    `json:"status"`
+	DurationMS      int64  `json:"duration_ms"`
+	TTFBMS          int64  `json:"ttfb_ms"`
+	PromptChars     int    `json:"prompt_chars"`
+	CompletionChars int    `json:"completion_chars"`
+	Conversation    string `json:"conversation,omitempty"`
+	ClientIP        string `json:"client_ip,omitempty"`
+	UserAgent       string `json:"user_agent,omitempty"`
+	APIKey          string `json:"api_key,omitempty"`
+	Error           string `json:"error,omitempty"`
+	Prompt          string `json:"prompt,omitempty"`
+	Completion      string `json:"completion,omitempty"`
+}
+
+// Stats 是日志汇总。
+type Stats struct {
+	Total        int64            `json:"total"`
+	Success      int64            `json:"success"`
+	Errors       int64            `json:"errors"`
+	Streaming    int64            `json:"streaming"`
+	AvgDuration  int64            `json:"avg_duration_ms"`
+	AvgTTFB      int64            `json:"avg_ttfb_ms"`
+	ByModel      map[string]int64 `json:"by_model"`
+	ByAccount    map[string]int64 `json:"by_account"`
+	Last24h      int64            `json:"last_24h"`
+}
+
+// Log 是环形日志。
+type Log struct {
+	mu             sync.RWMutex
+	ring           []Entry
+	size           int
+	next           int
+	full           bool
+	archivePath    string
+	archiveEnabled bool
+	includePrompts bool
+}
+
+// New 构造日志。
+func New(size int, archivePath string, archiveEnabled, includePrompts bool) *Log {
+	if size <= 0 {
+		size = 500
+	}
+	return &Log{size: size, ring: make([]Entry, size), archivePath: archivePath, archiveEnabled: archiveEnabled, includePrompts: includePrompts}
+}
+
+// Add 写入一条记录。
+func (l *Log) Add(e Entry) {
+	if e.Time == 0 {
+		e.Time = time.Now().UnixMilli()
+	}
+	if !l.includePrompts {
+		e.Prompt = ""
+		e.Completion = ""
+	}
+	l.mu.Lock()
+	l.ring[l.next] = e
+	l.next = (l.next + 1) % l.size
+	if l.next == 0 {
+		l.full = true
+	}
+	l.mu.Unlock()
+	if l.archiveEnabled && l.archivePath != "" {
+		l.archive(e)
+	}
+}
+
+func (l *Log) archive(e Entry) {
+	b, err := json.Marshal(e)
+	if err != nil {
+		return
+	}
+	b = append(b, '\n')
+	dir := filepath.Dir(l.archivePath)
+	if dir != "" && dir != "." {
+		_ = os.MkdirAll(dir, 0o750)
+	}
+	f, err := os.OpenFile(l.archivePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o640)
+	if err != nil {
+		return
+	}
+	_, _ = f.Write(b)
+	_ = f.Close()
+}
+
+// List 返回最近的记录（新的在前），可按关键词过滤。
+func (l *Log) List(limit int, q string) []Entry {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	n := l.next
+	if l.full {
+		n = l.size
+	}
+	if limit <= 0 || limit > n {
+		limit = n
+	}
+	out := make([]Entry, 0, limit)
+	lower := strings.ToLower(strings.TrimSpace(q))
+	for i := 0; i < n && len(out) < limit; i++ {
+		idx := l.next - 1 - i
+		if idx < 0 {
+			idx += l.size
+		}
+		e := l.ring[idx]
+		if lower != "" {
+			hay := strings.ToLower(e.Model + " " + e.Account + " " + e.Error + " " + e.ClientIP + " " + e.Endpoint + " " + e.Conversation)
+			if !strings.Contains(hay, lower) {
+				continue
+			}
+		}
+		out = append(out, e)
+	}
+	return out
+}
+
+// Stats 汇总日志。
+func (l *Log) Stats() Stats {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	s := Stats{ByModel: map[string]int64{}, ByAccount: map[string]int64{}}
+	n := l.next
+	if l.full {
+		n = l.size
+	}
+	var dur, ttfb int64
+	cut := time.Now().Add(-24 * time.Hour).UnixMilli()
+	for i := 0; i < n; i++ {
+		e := l.ring[i]
+		s.Total++
+		if e.Status == 200 {
+			s.Success++
+		} else {
+			s.Errors++
+		}
+		if e.Stream {
+			s.Streaming++
+		}
+		dur += e.DurationMS
+		ttfb += e.TTFBMS
+		if e.Model != "" {
+			s.ByModel[e.Model]++
+		}
+		if e.Account != "" {
+			s.ByAccount[e.Account]++
+		}
+		if e.Time >= cut {
+			s.Last24h++
+		}
+	}
+	if s.Total > 0 {
+		s.AvgDuration = dur / s.Total
+		s.AvgTTFB = ttfb / s.Total
+	}
+	return s
+}
