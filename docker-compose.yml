@@ -1,17 +1,41 @@
 services:
   orcaterm2api:
-    build: .
-    image: orcaterm2api:latest
+    # 直接用 GitHub Actions 构建好的镜像；想本地构建就取消下面 build 的注释
+    image: ghcr.io/woshimaniubi8/orcaterm2api:latest
+    # build: .
     container_name: orcaterm2api
     restart: unless-stopped
+
+    # 容器内默认以 app(10001) 运行。宿主机 ./data 属主不同会导致写 config/auths 失败。
+    # 三种解法任选：
+    #   1) 让容器用你的 uid 运行：PUID=$(id -u) PGID=$(id -g) docker compose up -d
+    #      或写进 .env：PUID=1000 / PGID=1000
+    #   2) sudo chown -R 10001:10001 ./data
+    #   3) 改成 user: "0:0" 以 root 运行（省事但安全性差）
+    user: "${PUID:-10001}:${PGID:-10001}"
+
     ports:
       - "7864:7864"
+
     volumes:
+      # 配置、账号、日志、请求归档都在 /data 下：
+      #   /data/config.json     首次启动自动生成（API Key / 面板密码见 docker logs）
+      #   /data/auths/*.json    账号凭证
+      #   /data/requests.jsonl  请求归档
       - ./data:/data
+
     environment:
       - TZ=Asia/Shanghai
+
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:7864/healthz"]
       interval: 30s
       timeout: 5s
       retries: 3
+      start_period: 10s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
