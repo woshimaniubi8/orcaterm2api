@@ -262,10 +262,10 @@ func extractTokenBundle(v any, cookies []*http.Cookie) tokenBundle {
 	}
 	walk(v)
 	for _, c := range cookies {
-		if c.Name == "ot_session" && out.Access == "" && strings.Count(c.Value, ".") == 2 {
+		if (c.Name == "ot_session" || c.Name == "__Secure-ot_session") && out.Access == "" && strings.Count(c.Value, ".") == 2 {
 			out.Access = c.Value
 		}
-		if c.Name == "ot_login" && out.LoginCookie == "" && c.Value != "" {
+		if c.Name == "ot_login" && out.LoginCookie == "" && len(c.Value) > 20 && c.Value != "1" {
 			out.LoginCookie = c.Value
 		}
 		ln := strings.ToLower(c.Name)

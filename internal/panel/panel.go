@@ -179,6 +179,8 @@ func (p *Panel) handleAPI(w http.ResponseWriter, r *http.Request) {
 		p.handleAccountAdd(w, r)
 	case path == "/accounts/import-local" && r.Method == http.MethodPost:
 		p.handleImportLocal(w, r)
+	case path == "/accounts/import-local-auto" && r.Method == http.MethodPost:
+		p.handleImportLocalAuto(w, r)
 	case strings.HasPrefix(path, "/accounts/"):
 		p.handleAccountAction(w, r, strings.TrimPrefix(path, "/accounts/"))
 	case path == "/models" && r.Method == http.MethodGet:

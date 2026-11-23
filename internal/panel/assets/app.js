@@ -278,7 +278,9 @@
     }
     if (!res.ok) {
       var msg = data && data.error ? data.error : ('请求失败（HTTP ' + res.status + '）');
-      throw new ApiError(msg, res.status);
+      var apiErr = new ApiError(msg, res.status);
+      if (data && data.hint) apiErr.hint = data.hint;
+      throw apiErr;
     }
     return data || {};
   }
@@ -1410,15 +1412,17 @@
             '<span class="field-hint">从本机 OrcaTerm 客户端数据导入账号，需面板与客户端在同一台机器。</span></div>' +
           '<div class="form-field"><label class="field-label" for="import-refresh">refresh_token</label>' +
             '<input type="text" id="import-refresh" class="mono" placeholder="选填，覆盖本地文件中的刷新令牌" autocomplete="off"></div>' +
+          '<div class="form-field full"><button class="btn btn-primary" type="button" id="import-auto-btn">自动读取本机令牌（含 refresh token）</button>' +
+            '<span class="field-hint">需要 OrcaTerm 已登录并在运行、本机有 Node.js；不需要打开桌面授权链接。</span></div>' +
         '</div>' +
         '<div class="tab-panel" data-panel="oauth" hidden>' +
           '<div class="oauth-box">' +
             '<div id="orca-qr" class="orca-qr"><span class="spinner"></span></div>' +
             '<p id="orca-qr-status" class="oauth-status">正在获取微信二维码…</p>' +
-            '<p class="field-hint">用微信「扫一扫」扫描上方二维码，扫码后账号会自动写入。此流程不会跳转登录页，也不会拉起桌面客户端。</p>' +
+            '<p class="field-hint">用微信「扫一扫」扫描上方二维码，扫码后账号会自动写入（含 refresh token）。浏览器若提示打开 OrcaTerm 客户端，忽略即可。</p>' +
             '<button class="btn btn-sm" type="button" id="orca-qr-refresh">刷新二维码</button>' +
-            '<div class="oauth-manual"><label class="field-label" for="oauth-bridge-url">扫码后没反应？粘贴浏览器地址栏的 bridge 链接</label>' +
-              '<div class="copy-row"><input id="oauth-bridge-url" class="mono" placeholder="https://orcaterm.com/oauth/wechat/bridge?code=...&state=...">' +
+            '<div class="oauth-manual"><label class="field-label" for="oauth-bridge-url">扫码后没反应？粘贴浏览器地址栏的链接</label>' +
+              '<div class="copy-row"><input id="oauth-bridge-url" class="mono" placeholder="https://orcaterm.com/login?session_id=... 或 bridge?code=...&state=...">' +
               '<button class="btn btn-sm" type="button" id="oauth-bridge-submit">完成登录</button></div></div>' +
           '</div>' +
           '<details class="oauth-fallback"><summary>备用：浏览器授权链接</summary>' +
@@ -1453,6 +1457,24 @@
         wrap.querySelectorAll('.tab').forEach(function (b) {
           b.addEventListener('click', function () { setTab(b.dataset.tab); });
         });
+
+        var autoBtn = wrap.querySelector('#import-auto-btn');
+        if (autoBtn) {
+          autoBtn.addEventListener('click', async function () {
+            setBtnLoading(autoBtn, true);
+            try {
+              var res = await api('accounts/import-local-auto', { method: 'POST', body: {} });
+              close();
+              toast('账号已导入' + (res.account && res.account.name ? '：' + res.account.name : ''), 'success');
+              go('accounts');
+            } catch (err) {
+              toast(err.message || '导入失败', 'error', 6000);
+              if (err.hint) toast(err.hint, 'warn', 7000);
+            } finally {
+              if (autoBtn.isConnected) setBtnLoading(autoBtn, false);
+            }
+          });
+        }
 
         var linkBtn = wrap.querySelector('#oauth-link-btn');
         if (linkBtn) {
