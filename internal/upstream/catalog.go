@@ -297,17 +297,16 @@ func DedupCatalog(specs []ModelSpec) []ModelSpec {
 func seedModelMeta(id string) (ctx, out int) {
 	switch strings.ToLower(id) {
 	case "deepseek-v4-pro", "deepseek-v4-flash", "deepseek-v4.1-flash":
-		return 1000000, 64000
-	case "glm-5.2", "glm-5.3":
-		return 1000000, 131000
-	case "glm-5.3-flash":
-		return 200000, 64000
+		// 对齐 workbuddy2api 的展示：1M 上下文 / 128K 最大输出。
+		return 1000000, 128000
+	case "glm-5.2", "glm-5.3", "glm-5.3-flash":
+		return 1000000, 131072
 	case "kimi-k3":
-		return 1000000, 64000
+		return 1048576, 131072
 	case "hy3":
 		return 192000, 64000
 	case "hy4":
-		return 256000, 64000
+		return 1000000, 64000
 	default:
 		return 0, 0
 	}
