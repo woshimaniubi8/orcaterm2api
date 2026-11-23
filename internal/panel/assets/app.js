@@ -1417,18 +1417,18 @@
         '</div>' +
         '<div class="tab-panel" data-panel="oauth" hidden>' +
           '<div class="oauth-box">' +
-            '<div id="orca-qr" class="orca-qr"><span class="spinner"></span></div>' +
-            '<p id="orca-qr-status" class="oauth-status">正在获取微信二维码…</p>' +
-            '<p class="field-hint">用微信「扫一扫」扫描上方二维码，扫码后账号会自动写入（含 refresh token）。浏览器若提示打开 OrcaTerm 客户端，忽略即可。</p>' +
-            '<button class="btn btn-sm" type="button" id="orca-qr-refresh">刷新二维码</button>' +
+            '<p>点击生成浏览器授权链接，在浏览器里用微信扫码；面板会自动轮询并写入账号（含 refresh token）。</p>' +
+            '<p class="field-hint">浏览器若提示打开 OrcaTerm 客户端，忽略即可；扫码后若面板没反应，把地址栏链接粘贴到下面。</p>' +
+            '<button class="btn btn-primary" type="button" id="oauth-link-btn">生成授权链接</button>' +
+            '<div id="oauth-result"></div>' +
             '<div class="oauth-manual"><label class="field-label" for="oauth-bridge-url">扫码后没反应？粘贴浏览器地址栏的链接</label>' +
               '<div class="copy-row"><input id="oauth-bridge-url" class="mono" placeholder="https://orcaterm.com/login?session_id=... 或 bridge?code=...&state=...">' +
               '<button class="btn btn-sm" type="button" id="oauth-bridge-submit">完成登录</button></div></div>' +
           '</div>' +
-          '<details class="oauth-fallback"><summary>备用：浏览器授权链接</summary>' +
-            '<p class="field-hint">如果面板内的二维码无法显示，可生成浏览器链接（需先退出 OrcaTerm 客户端，否则深层链接会抢占登录会话）。</p>' +
-            '<button class="btn btn-sm" type="button" id="oauth-link-btn">生成链接</button>' +
-            '<div id="oauth-result"></div>' +
+          '<details class="oauth-fallback" id="oauth-qr-details"><summary>备用：面板内微信二维码（桌面 PKCE，含 refresh token）</summary>' +
+            '<div id="orca-qr" class="orca-qr"><span class="spinner"></span></div>' +
+            '<p id="orca-qr-status" class="oauth-status">展开后会加载二维码</p>' +
+            '<button class="btn btn-sm" type="button" id="orca-qr-refresh">刷新二维码</button>' +
           '</details>' +
         '</div>',
       footer: '<button class="btn" type="button" data-cancel>取消</button>' +
@@ -1447,11 +1447,7 @@
           wrap.querySelectorAll('.tab-panel').forEach(function (p) {
             p.hidden = p.dataset.panel !== tab;
           });
-          submit.textContent = tab === 'token' ? '添加账号' : tab === 'import' ? '导入账号' : '刷新二维码';
-          if (tab === 'oauth') {
-            if (wrap._wx) wrap._wx.cleanup();
-            wrap._wx = loadWechatQR(wrap, close);
-          }
+          submit.textContent = tab === 'token' ? '添加账号' : tab === 'import' ? '导入账号' : '生成授权链接';
         }
 
         wrap.querySelectorAll('.tab').forEach(function (b) {
@@ -1476,18 +1472,61 @@
           });
         }
 
+        async function startOAuthLink() {
+          var linkBtn = wrap.querySelector('#oauth-link-btn');
+          if (linkBtn) setBtnLoading(linkBtn, true);
+          try {
+            var res = await api('oauth/start', { method: 'POST', body: {} });
+            renderOAuthResult(wrap, res);
+            toast('授权链接已生成，扫码后本页会自动完成', 'success');
+          } catch (err) {
+            toast(err.message || '生成链接失败', 'error');
+          } finally {
+            if (linkBtn && linkBtn.isConnected) setBtnLoading(linkBtn, false);
+          }
+        }
         var linkBtn = wrap.querySelector('#oauth-link-btn');
-        if (linkBtn) {
-          linkBtn.addEventListener('click', async function () {
-            linkBtn.disabled = true;
-            try {
-              var res = await api('oauth/start', { method: 'POST', body: {} });
-              renderOAuthResult(wrap, res);
-              toast('链接已生成，扫码后本页会自动完成', 'success');
-            } catch (err) {
-              toast(err.message || '生成链接失败', 'error');
-            } finally {
-              linkBtn.disabled = false;
+        if (linkBtn) linkBtn.addEventListener('click', startOAuthLink);
+
+        async function completeFromUrl() {
+          var input = wrap.querySelector('#oauth-bridge-url');
+          var raw = (input && input.value || '').trim();
+          if (!raw) { toast('请先粘贴浏览器地址栏的链接', 'error'); return; }
+          try {
+            var u = new URL(raw);
+            var code = u.searchParams.get('code');
+            var state = u.searchParams.get('state');
+            var sid = u.searchParams.get('session_id');
+            var res;
+            if (code && state) {
+              res = await api('oauth/wechat/exchange', { method: 'POST', body: { code: code, state: state } });
+            } else if (sid) {
+              res = await api('oauth/poll', { method: 'POST', body: { session_id: sid } });
+            } else if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw)) {
+              res = await api('oauth/poll', { method: 'POST', body: { session_id: raw } });
+            } else {
+              throw new Error('链接里没有 session_id 或 code/state');
+            }
+            if (res.status === 'pending') { toast('还没完成扫码，请稍后再点一次', 'warn'); return; }
+            if (res.status === 'expired') { toast('扫码会话已过期，请重新生成链接', 'error'); return; }
+            toast('账号已添加' + (res.account && res.account.name ? '：' + res.account.name : ''), 'success');
+            close();
+            go('accounts');
+          } catch (err) {
+            toast(err.message || '完成登录失败', 'error');
+          }
+        }
+        var bridgeBtn = wrap.querySelector('#oauth-bridge-submit');
+        if (bridgeBtn) bridgeBtn.addEventListener('click', completeFromUrl);
+
+        var qrDetails = wrap.querySelector('#oauth-qr-details');
+        if (qrDetails) {
+          qrDetails.addEventListener('toggle', function () {
+            if (qrDetails.open && !wrap._wx) {
+              wrap._wx = loadWechatQR(wrap, close);
+            } else if (!qrDetails.open && wrap._wx) {
+              wrap._wx.cleanup();
+              wrap._wx = null;
             }
           });
         }
@@ -1510,8 +1549,7 @@
 
         submit.addEventListener('click', async function () {
           if (state.addTab === 'oauth') {
-            if (wrap._wx) wrap._wx.cleanup();
-            wrap._wx = loadWechatQR(wrap, close);
+            startOAuthLink();
             return;
           }
 
