@@ -52,8 +52,9 @@ func TestImportLocalNumericUserID(t *testing.T) {
 }
 
 func TestHasRefreshWithLoginCookie(t *testing.T) {
-	a := &Account{LoginCookie: "x"}
+	a := &Account{LoginCookie: "0123456789abcdef0123456789abcdef"}
 	if !a.HasRefresh() {
 		t.Fatal("login cookie should count as refreshable")
 	}
 }
+
