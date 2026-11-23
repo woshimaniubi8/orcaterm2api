@@ -454,6 +454,7 @@ type configView struct {
 	Models       config.ModelsConfig  `json:"models"`
 	Pool         config.PoolConfig    `json:"pool"`
 	Conversation config.ConversationConfig `json:"conversation"`
+	Prompt       config.PromptConfig       `json:"prompt"`
 	Logging      config.LoggingConfig `json:"logging"`
 }
 
@@ -466,7 +467,7 @@ func (p *Panel) handleConfigGet(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, configView{
 		Listen: cfg.Listen, APIKeys: keys, PanelPath: cfg.Panel.Path,
 		Upstream: cfg.Upstream, Models: cfg.Models, Pool: cfg.Pool,
-		Conversation: cfg.Conversation, Logging: cfg.Logging,
+		Conversation: cfg.Conversation, Prompt: cfg.Prompt, Logging: cfg.Logging,
 	})
 }
 
@@ -477,6 +478,7 @@ type configPatch struct {
 	Models       *config.ModelsConfig    `json:"models"`
 	Pool         *config.PoolConfig      `json:"pool"`
 	Conversation *config.ConversationConfig `json:"conversation"`
+	Prompt       *config.PromptConfig       `json:"prompt"`
 	Logging      *config.LoggingConfig   `json:"logging"`
 }
 
@@ -530,6 +532,9 @@ func (p *Panel) handleConfigPut(w http.ResponseWriter, r *http.Request) {
 		}
 		if patch.Conversation != nil {
 			c.Conversation = *patch.Conversation
+		}
+		if patch.Prompt != nil {
+			c.Prompt = *patch.Prompt
 		}
 		if patch.Logging != nil {
 			patch.Logging.ArchiveFile = c.Logging.ArchiveFile

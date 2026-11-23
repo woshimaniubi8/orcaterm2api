@@ -105,6 +105,17 @@ type PoolConfig struct {
 	MaxPerMinute int `json:"max_per_minute"`
 }
 
+type PromptConfig struct {
+	// Mode: upstream（保留上游产品人设）/ neutral（通用助手）/ custom（自定义指令）。
+	Mode string `json:"mode"`
+	// Text 是 custom 模式的指令；neutral 留空使用内置通用助手指令。
+	Text string `json:"text"`
+	// Ack 是注入历史里助手侧的确认语，留空使用默认。
+	Ack string `json:"ack"`
+	// Prime 是否注入「覆盖上游人设」的合成历史；nil 视为 true。
+	Prime *bool `json:"prime"`
+}
+
 type ConversationConfig struct {
 	// Mode: stateless（默认，每次带全量 history）/ sticky（按会话复用 cid，历史留在服务端）。
 	Mode string `json:"mode"`
@@ -141,6 +152,7 @@ type Config struct {
 	Models        ModelsConfig       `json:"models"`
 	Pool          PoolConfig         `json:"pool"`
 	Conversation  ConversationConfig `json:"conversation"`
+	Prompt        PromptConfig        `json:"prompt"`
 	Logging       LoggingConfig      `json:"logging"`
 	Panel         PanelConfig        `json:"panel"`
 }
@@ -201,6 +213,10 @@ func Default() *Config {
 			PreferFreshToken: true,
 			MinInterval:      Duration(3 * time.Second),
 			MaxPerMinute:     10,
+		},
+		Prompt: PromptConfig{
+			Mode:  "neutral",
+			Prime: boolPtr(true),
 		},
 		Conversation: ConversationConfig{
 			Mode:               "stateless",
@@ -311,6 +327,17 @@ func (c *Config) Normalize() {
 	}
 	if c.Pool.MaxPerMinute <= 0 {
 		c.Pool.MaxPerMinute = d.Pool.MaxPerMinute
+	}
+	switch c.Prompt.Mode {
+	case "upstream", "neutral", "custom":
+	default:
+		c.Prompt.Mode = "neutral"
+	}
+	if c.Prompt.Mode == "custom" && strings.TrimSpace(c.Prompt.Text) == "" {
+		c.Prompt.Mode = "neutral"
+	}
+	if c.Prompt.Prime == nil {
+		c.Prompt.Prime = boolPtr(true)
 	}
 	if c.Conversation.Mode == "" {
 		c.Conversation.Mode = d.Conversation.Mode
@@ -474,3 +501,5 @@ func (m *Manager) Secret() string {
 	defer m.mu.RUnlock()
 	return m.cfg.Panel.Password
 }
+
+func boolPtr(v bool) *bool { return &v }

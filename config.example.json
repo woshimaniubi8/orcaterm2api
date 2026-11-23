@@ -118,6 +118,12 @@
     "min_interval": "3s",
     "max_per_minute": 10
   },
+  "prompt": {
+    "mode": "neutral",
+    "text": "",
+    "ack": "",
+    "prime": true
+  },
   "conversation": {
     "mode": "stateless",
     "sticky_ttl": "30m",

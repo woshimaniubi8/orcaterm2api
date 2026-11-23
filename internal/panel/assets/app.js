@@ -970,6 +970,7 @@
     var up = cfg.upstream || {};
     var pool = cfg.pool || {};
     var conv = cfg.conversation || {};
+    var promptCfg = cfg.prompt || {};
     var log = cfg.logging || {};
     var apiKeys = (cfg.api_keys_mask || []).join('\n');
 
@@ -1033,6 +1034,22 @@
             '<input type="text" id="pool-min-interval" class="mono" value="' + attr(pool.min_interval) + '" placeholder="2s"></div>' +
           '<div class="form-field full"><label class="switch"><input type="checkbox" id="pool-prefer-fresh"' + (pool.prefer_fresh_token ? ' checked' : '') + '>' +
             '<span class="switch-track"></span><span>优先使用剩余有效期长的令牌（prefer_fresh_token）</span></label></div>' +
+        '</div>' +
+      '</section>' +
+
+      '<section class="card settings-section">' +
+        '<div class="section-head"><div class="section-icon"><svg class="icon"><use href="#i-message"></use></svg></div>' +
+          '<div><h2 class="section-title">提示词与人设</h2><p class="section-desc">上游助手自带 OrcaTerm 运维人设；默认用「通用助手」覆盖，避免预制自我介绍。</p></div></div>' +
+        '<div class="form-grid">' +
+          '<div class="form-field"><label class="field-label" for="prompt-mode">mode</label>' +
+            '<select id="prompt-mode">' + selectOptions([['neutral', 'neutral · 通用助手（推荐）'], ['upstream', 'upstream · 保留 OrcaTerm 人设'], ['custom', 'custom · 自定义指令']], promptCfg.mode) + '</select></div>' +
+          '<div class="form-field"><label class="switch"><input type="checkbox" id="prompt-prime"' + (promptCfg.prime !== false ? ' checked' : '') + '>' +
+            '<span class="switch-track"></span><span>注入覆盖人设的合成历史（prime）</span></label></div>' +
+          '<div class="form-field full"><label class="field-label" for="prompt-text">custom 指令</label>' +
+            '<textarea id="prompt-text" rows="4" placeholder="mode=custom 时生效；留空回退 neutral">' + esc(promptCfg.text || '') + '</textarea>' +
+            '<span class="field-hint">neutral 使用内置通用助手指令，不需要填写。</span></div>' +
+          '<div class="form-field full"><label class="field-label" for="prompt-ack">助手确认语（ack）</label>' +
+            '<input type="text" id="prompt-ack" value="' + attr(promptCfg.ack || '') + '" placeholder="留空使用默认确认语"></div>' +
         '</div>' +
       '</section>' +
 
@@ -1154,6 +1171,12 @@
         max_history_messages: intField('conv-max-messages', 'max_history_messages', 0),
         max_history_chars: intField('conv-max-chars', 'max_history_chars', 0),
         system_prompt_mode: fieldValue('conv-system-mode')
+      });
+      payload.prompt = Object.assign({}, cfg.prompt || {}, {
+        mode: fieldValue('prompt-mode'),
+        text: fieldValue('prompt-text'),
+        ack: fieldValue('prompt-ack'),
+        prime: $('prompt-prime').checked
       });
       payload.logging = Object.assign({}, cfg.logging || {}, {
         ring_size: intField('log-ring-size', 'ring_size', 1),
