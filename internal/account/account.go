@@ -37,7 +37,12 @@ func (a *Account) Clone() *Account { cp := *a; return &cp }
 
 // HasRefresh 是否有刷新令牌。
 func (a *Account) HasRefresh() bool {
-	return strings.TrimSpace(a.RefreshToken) != "" || strings.TrimSpace(a.LoginCookie) != ""
+	if strings.TrimSpace(a.RefreshToken) != "" {
+		return true
+	}
+	lc := strings.TrimSpace(a.LoginCookie)
+	// Web 扫码只会下发 ot_login=1 这类标记，不是可续期凭证。
+	return lc != "" && lc != "1" && len(lc) > 20
 }
 
 // Expired 判断访问令牌是否已过期（留 60 秒余量）。
@@ -207,6 +212,9 @@ func LoadDir(dir string) ([]*Account, error) {
 		}
 		if a.ID == "" {
 			continue
+		}
+		if a.LoginCookie == "1" {
+			a.LoginCookie = ""
 		}
 		if a.CreatedAt == 0 {
 			a.CreatedAt = time.Now().UnixMilli()

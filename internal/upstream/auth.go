@@ -63,6 +63,9 @@ func (c *Client) cgiCall(ctx context.Context, action string, data any, accessTok
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("X-Product", cfg.Product)
 	req.Header.Set("X-SeqId", newRequestID())
+	req.Header.Set("Origin", "https://orcaterm.com")
+	req.Header.Set("Referer", "https://orcaterm.com/")
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
 	if accessToken != "" {
 		req.Header.Set("Cookie", "ot_session="+accessToken)
 	}
@@ -237,6 +240,9 @@ func (c *Client) IssueAccessToken(ctx context.Context, loginCookie string) (*Tok
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("X-Product", cfg.Product)
+	req.Header.Set("Origin", "https://orcaterm.com")
+	req.Header.Set("Referer", "https://orcaterm.com/")
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
 	req.Header.Set("Cookie", "ot_login="+loginCookie)
 	resp, err := c.http.Do(req)
 	if err != nil {
