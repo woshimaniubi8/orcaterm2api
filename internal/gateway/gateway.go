@@ -430,6 +430,9 @@ func (g *Gateway) RefreshAccount(ctx context.Context, e *pool.Entry) error {
 		if lerr == nil && tok != nil && tok.AccessToken != "" {
 			next := a
 			next.AccessToken = tok.AccessToken
+			if tok.RefreshToken != "" {
+				next.RefreshToken = tok.RefreshToken
+			}
 			if exp := tok.ExpiresAt(time.Now()); exp > 0 {
 				next.ExpiresAt = exp
 			} else {

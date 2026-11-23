@@ -247,8 +247,9 @@ func (c *Client) IssueAccessToken(ctx context.Context, loginCookie string) (*Tok
 	var env struct {
 		Data struct {
 			Response struct {
-				AccessToken string `json:"AccessToken"`
-				ExpiresIn   int    `json:"ExpiresIn"`
+				AccessToken  string `json:"AccessToken"`
+				RefreshToken string `json:"RefreshToken"`
+				ExpiresIn    int    `json:"ExpiresIn"`
 				Error       *cgiError `json:"Error"`
 			} `json:"Response"`
 		} `json:"data"`
@@ -262,5 +263,5 @@ func (c *Client) IssueAccessToken(ctx context.Context, loginCookie string) (*Tok
 	if env.Data.Response.AccessToken == "" {
 		return nil, &APIError{Kind: KindAuth, Message: "IssueAccessToken 未返回 AccessToken"}
 	}
-	return &Tokens{AccessToken: env.Data.Response.AccessToken, ExpiresIn: env.Data.Response.ExpiresIn, TokenType: "Bearer"}, nil
+	return &Tokens{AccessToken: env.Data.Response.AccessToken, RefreshToken: env.Data.Response.RefreshToken, ExpiresIn: env.Data.Response.ExpiresIn, TokenType: "Bearer"}, nil
 }
