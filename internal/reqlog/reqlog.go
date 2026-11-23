@@ -25,6 +25,10 @@ type Entry struct {
 	TTFBMS          int64  `json:"ttfb_ms"`
 	PromptChars     int    `json:"prompt_chars"`
 	CompletionChars int    `json:"completion_chars"`
+	PromptTokens    int     `json:"prompt_tokens"`
+	CompletionTokens int    `json:"completion_tokens"`
+	TotalTokens     int     `json:"total_tokens"`
+	TokensPerSecond float64 `json:"tokens_per_second"`
 	Conversation    string `json:"conversation,omitempty"`
 	ClientIP        string `json:"client_ip,omitempty"`
 	UserAgent       string `json:"user_agent,omitempty"`
@@ -42,6 +46,8 @@ type Stats struct {
 	Streaming    int64            `json:"streaming"`
 	AvgDuration  int64            `json:"avg_duration_ms"`
 	AvgTTFB      int64            `json:"avg_ttfb_ms"`
+	TotalTokens  int64            `json:"total_tokens"`
+	AvgTPS       float64          `json:"avg_tps"`
 	ByModel      map[string]int64 `json:"by_model"`
 	ByAccount    map[string]int64 `json:"by_account"`
 	Last24h      int64            `json:"last_24h"`
@@ -145,7 +151,9 @@ func (l *Log) Stats() Stats {
 	if l.full {
 		n = l.size
 	}
-	var dur, ttfb int64
+	var dur, ttfb, tokens int64
+	var tpsCount int64
+	var tpsSum float64
 	cut := time.Now().Add(-24 * time.Hour).UnixMilli()
 	for i := 0; i < n; i++ {
 		e := l.ring[i]
@@ -160,6 +168,11 @@ func (l *Log) Stats() Stats {
 		}
 		dur += e.DurationMS
 		ttfb += e.TTFBMS
+		tokens += int64(e.TotalTokens)
+		if e.TokensPerSecond > 0 {
+			tpsSum += e.TokensPerSecond
+			tpsCount++
+		}
 		if e.Model != "" {
 			s.ByModel[e.Model]++
 		}
@@ -173,6 +186,10 @@ func (l *Log) Stats() Stats {
 	if s.Total > 0 {
 		s.AvgDuration = dur / s.Total
 		s.AvgTTFB = ttfb / s.Total
+	}
+	s.TotalTokens = tokens
+	if tpsCount > 0 {
+		s.AvgTPS = tpsSum / float64(tpsCount)
 	}
 	return s
 }

@@ -96,6 +96,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		}
 		pt := estimateTokens(entry.Prompt)
 		ct := estimateTokens(content) + estimateTokens(reasoning)
+		recordUsage(&entry, pt, ct)
 		writeJSON(w, http.StatusOK, chatCompletionResponse{
 			ID:      newID("chatcmpl-"),
 			Object:  "chat.completion",
@@ -224,6 +225,7 @@ func (s *Server) streamChat(w http.ResponseWriter, r *http.Request, out *gateway
 	}
 	pt := estimateTokens(entry.Prompt)
 	ct := estimateTokens(entry.Completion)
+	recordUsage(entry, pt, ct)
 	send(chatCompletionChunk{
 		ID: id, Object: "chat.completion.chunk", Created: created, Model: out.Model,
 		Choices: []chunkChoice{}, Usage: &usageInfo{PromptTokens: pt, CompletionTokens: ct, TotalTokens: pt + ct},

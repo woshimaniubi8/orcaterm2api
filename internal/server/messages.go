@@ -110,6 +110,7 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 		entry.Status = http.StatusOK
 		pt := estimateTokens(entry.Prompt)
 		ct := estimateTokens(content) + estimateTokens(reasoning)
+		recordUsage(&entry, pt, ct)
 		writeJSON(w, http.StatusOK, map[string]any{
 			"id":            newID("msg_"),
 			"type":          "message",
@@ -222,6 +223,9 @@ func (s *Server) streamMessages(w http.ResponseWriter, r *http.Request, out *gat
 	if entry.TTFBMS == 0 {
 		entry.TTFBMS = entry.DurationMS
 	}
+	pt := estimateTokens(entry.Prompt)
+	ct := estimateTokens(entry.Completion)
+	recordUsage(entry, pt, ct)
 	event("content_block_stop", map[string]any{"type": "content_block_stop", "index": 0})
 	event("message_delta", map[string]any{
 		"type":  "message_delta",

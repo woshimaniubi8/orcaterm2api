@@ -180,3 +180,13 @@ func newID(prefix string) string {
 	_, _ = cryptoRandRead(b)
 	return fmt.Sprintf("%s%x", prefix, b)
 }
+
+// recordUsage 把估算 token 写入请求日志（上游不返回 usage）。
+func recordUsage(e *reqlog.Entry, pt, ct int) {
+	e.PromptTokens = pt
+	e.CompletionTokens = ct
+	e.TotalTokens = pt + ct
+	if e.DurationMS > 0 {
+		e.TokensPerSecond = float64(ct) / (float64(e.DurationMS) / 1000.0)
+	}
+}

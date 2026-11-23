@@ -99,6 +99,19 @@
     return m + '分钟';
   }
 
+  function fmtTok(n) {
+    n = Number(n) || 0;
+    if (!n) return '0';
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+    return String(n);
+  }
+
+  function fmtTps(n) {
+    n = Number(n) || 0;
+    return n > 0 ? n.toFixed(1) : '—';
+  }
+
   function fmtInt(n) {
     var v = Number(n);
     return Number.isFinite(v) ? v.toLocaleString('zh-CN') : '0';
@@ -586,6 +599,9 @@
       '<article class="stat-card"><div class="stat-label">平均耗时</div>' +
         '<div class="stat-value">' + esc(total ? fmtDuration(req.avg_duration_ms) : '—') + '</div>' +
         '<div class="stat-meta">平均 TTFB ' + esc(req.avg_ttfb_ms ? fmtDuration(req.avg_ttfb_ms) : '—') + '</div></article>' +
+      '<article class="stat-card"><div class="stat-label">Tokens 总量</div>' +
+        '<div class="stat-value">' + fmtTok(req.total_tokens) + '</div>' +
+        '<div class="stat-meta">平均 ' + fmtTps(req.avg_tps) + ' tok/s</div></article>' +
       '<article class="stat-card"><div class="stat-label">会话数</div>' +
         '<div class="stat-value">' + fmtInt(ov.conversations) + '<small>个</small></div>' +
         '<div class="stat-meta">默认模型 ' + esc(ov.default_model || '—') + '</div></article>';
@@ -596,6 +612,7 @@
         '<div class="fact"><span>流式请求</span><strong>' + fmtInt(req.streaming) + '</strong></div>' +
         '<div class="fact"><span>池请求</span><strong>' + fmtInt(ov.pool_requests) + '</strong></div>' +
         '<div class="fact"><span>池错误</span><strong>' + fmtInt(ov.pool_errors) + '</strong></div>' +
+        '<div class="fact"><span>Tokens 总量</span><strong>' + fmtTok(req.total_tokens) + '</strong></div>' +
       '</div>';
 
     return '<div class="stat-grid">' + cards + '</div>' + facts +
@@ -618,11 +635,14 @@
         '<td>' + statusPill(log.status) + '</td>' +
         '<td class="mono">' + esc(fmtDuration(log.duration_ms)) + '</td>' +
         '<td class="mono">' + esc(log.ttfb_ms ? fmtDuration(log.ttfb_ms) : '—') + '</td>' +
+        '<td class="mono" title="prompt / completion">' + fmtTok(log.prompt_tokens) + ' / ' + fmtTok(log.completion_tokens) + '</td>' +
+        '<td class="mono">' + fmtTok(log.total_tokens) + '</td>' +
+        '<td class="mono">' + fmtTps(log.tokens_per_second) + '</td>' +
         '<td>' + (log.stream ? '<span class="tag tag-blue">流式</span>' : '<span class="tag">普通</span>') + '</td>' +
       '</tr>';
     }).join('');
     return '<div class="table-wrap"><table class="data"><thead><tr>' +
-      '<th>时间</th><th>端点</th><th>模型</th><th>账号</th><th>状态</th><th>耗时</th><th>TTFB</th><th>流式</th>' +
+      '<th>时间</th><th>端点</th><th>模型</th><th>账号</th><th>状态</th><th>耗时</th><th>TTFB</th><th>Tokens</th><th>总 Tokens</th><th>tok/s</th><th>流式</th>' +
       '</tr></thead><tbody>' + rows + '</tbody></table></div>';
   }
 
@@ -888,10 +908,12 @@
           '<span>成功 <b>' + fmtInt(stats.success) + '</b></span>' +
           '<span>错误 <b>' + fmtInt(stats.errors) + '</b></span>' +
           '<span>流式 <b>' + fmtInt(stats.streaming) + '</b></span>' +
-          '<span>平均耗时 <b>' + esc(fmtDuration(stats.avg_duration_ms)) + '</b></span>';
+          '<span>平均耗时 <b>' + esc(fmtDuration(stats.avg_duration_ms)) + '</b></span>' +
+          '<span>Tokens <b>' + fmtTok(stats.total_tokens) + '</b></span>' +
+          '<span>平均 tok/s <b>' + fmtTps(stats.avg_tps) + '</b></span>';
       }
       box.innerHTML = '<section class="card table-card"><div class="table-wrap"><table class="data">' +
-        '<thead><tr><th>时间</th><th>端点</th><th>模型</th><th>账号</th><th>状态</th><th>耗时</th><th>TTFB</th><th>流式</th><th>IP</th><th>错误</th></tr></thead>' +
+        '<thead><tr><th>时间</th><th>端点</th><th>模型</th><th>账号</th><th>状态</th><th>耗时</th><th>TTFB</th><th>Tokens</th><th>总 Tokens</th><th>tok/s</th><th>流式</th><th>IP</th><th>错误</th></tr></thead>' +
         '<tbody>' + logRowsHtml(state.logs) + '</tbody></table></div></section>';
     } catch (err) {
       if (seq !== state.logsSeq || state.view !== 'logs') return;
@@ -901,7 +923,7 @@
 
   function logRowsHtml(logs) {
     if (!logs.length) {
-      return '<tr><td colspan="10">' + emptyState('inbox', '没有匹配的日志', '尝试更换搜索关键词或增大条数。') + '</td></tr>';
+      return '<tr><td colspan="13">' + emptyState('inbox', '没有匹配的日志', '尝试更换搜索关键词或增大条数。') + '</td></tr>';
     }
     return logs.map(function (log, index) {
       return '<tr class="log-row" data-log-index="' + index + '">' +
@@ -912,11 +934,14 @@
         '<td>' + statusPill(log.status) + '</td>' +
         '<td class="mono">' + esc(fmtDuration(log.duration_ms)) + '</td>' +
         '<td class="mono">' + esc(log.ttfb_ms ? fmtDuration(log.ttfb_ms) : '—') + '</td>' +
+        '<td class="mono" title="prompt / completion">' + fmtTok(log.prompt_tokens) + ' / ' + fmtTok(log.completion_tokens) + '</td>' +
+        '<td class="mono">' + fmtTok(log.total_tokens) + '</td>' +
+        '<td class="mono">' + fmtTps(log.tokens_per_second) + '</td>' +
         '<td>' + (log.stream ? '<span class="tag tag-blue">流式</span>' : '<span class="tag">普通</span>') + '</td>' +
         '<td class="mono">' + esc(log.client_ip || '—') + '</td>' +
         '<td class="truncate" title="' + attr(log.error || '') + '">' + (log.error ? esc(log.error) : '—') + '</td>' +
       '</tr>' +
-      '<tr class="log-detail" hidden><td colspan="10">' + logDetailHtml(log) + '</td></tr>';
+      '<tr class="log-detail" hidden><td colspan="13">' + logDetailHtml(log) + '</td></tr>';
     }).join('');
   }
 
@@ -932,6 +957,8 @@
         '<span><b>Conversation</b><code class="mono">' + esc(log.conversation || '—') + '</code></span>' +
         '<span><b>UA</b>' + esc(log.user_agent || '—') + '</span>' +
         '<span><b>API Key</b><code class="mono">' + esc(log.api_key || '—') + '</code></span>' +
+        '<span><b>Tokens</b><code class="mono">' + fmtTok(log.prompt_tokens) + ' in / ' + fmtTok(log.completion_tokens) + ' out / ' + fmtTok(log.total_tokens) + ' total</code></span>' +
+        '<span><b>tok/s</b>' + fmtTps(log.tokens_per_second) + '</span>' +
       '</div></div>';
   }
 
