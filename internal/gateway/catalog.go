@@ -125,6 +125,7 @@ func (g *Gateway) RefreshCatalog(ctx context.Context) error {
 		g.catalog.SetError(err)
 		return err
 	}
+	applyModelMetadata(specs, cfg.Models.Metadata)
 	g.catalog.Replace(specs, "rainbow:"+cfg.Models.CatalogGroup)
 	return nil
 }
@@ -160,4 +161,24 @@ func (g *Gateway) Resolve(id string) (upstream.ModelSpec, bool) {
 		id = cfg.Upstream.DefaultModel
 	}
 	return g.catalog.Resolve(id, cfg.Models.Aliases)
+}
+
+// applyModelMetadata 用配置覆盖模型的上下文 / 最大输出。
+func applyModelMetadata(specs []upstream.ModelSpec, meta map[string]config.ModelMeta) {
+	if len(meta) == 0 {
+		return
+	}
+	for i := range specs {
+		for _, key := range []string{specs[i].ID, specs[i].DisplayName, specs[i].Upstream} {
+			if m, ok := meta[key]; ok {
+				if m.ContextLength > 0 {
+					specs[i].ContextLength = m.ContextLength
+				}
+				if m.MaxOutputTokens > 0 {
+					specs[i].MaxOutputTokens = m.MaxOutputTokens
+				}
+				break
+			}
+		}
+	}
 }

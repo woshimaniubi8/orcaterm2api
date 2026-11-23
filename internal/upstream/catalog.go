@@ -45,6 +45,7 @@ type ModelSpec struct {
 	Sort           int             `json:"sort"`
 	Free           bool            `json:"free"`
 	ContextLength  int             `json:"context_length,omitempty"`
+	MaxOutputTokens int            `json:"max_output_tokens,omitempty"`
 }
 
 // CatalogConfig 是 Rainbow 模型目录的拉取参数。
@@ -173,6 +174,11 @@ func parseRainbowRow(row rainbowRow) *ModelSpec {
 	}
 	spec.ThinkingLevels = parseThinkingLevels(row.ThinkingLevels)
 	spec.ContextLength = contextLengthFromDescription(row.Description)
+	seedCtx, seedOut := seedModelMeta(spec.ID)
+	if spec.ContextLength == 0 {
+		spec.ContextLength = seedCtx
+	}
+	spec.MaxOutputTokens = seedOut
 	return spec
 }
 
@@ -284,4 +290,25 @@ func DedupCatalog(specs []ModelSpec) []ModelSpec {
 		return out[i].DisplayName < out[j].DisplayName
 	})
 	return out
+}
+
+// seedModelMeta 是内置模型的参考上下文 / 最大输出（上游目录没有这两个字段，
+// 用公开规格 + workbuddy2api 的同名模型值做种子；可用 config.models.metadata 覆盖）。
+func seedModelMeta(id string) (ctx, out int) {
+	switch strings.ToLower(id) {
+	case "deepseek-v4-pro", "deepseek-v4-flash", "deepseek-v4.1-flash":
+		return 1000000, 64000
+	case "glm-5.2", "glm-5.3":
+		return 1000000, 131000
+	case "glm-5.3-flash":
+		return 200000, 64000
+	case "kimi-k3":
+		return 1000000, 64000
+	case "hy3":
+		return 192000, 64000
+	case "hy4":
+		return 256000, 64000
+	default:
+		return 0, 0
+	}
 }

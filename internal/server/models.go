@@ -46,6 +46,9 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 		if m.ContextLength > 0 {
 			item["context_length"] = m.ContextLength
 		}
+		if m.MaxOutputTokens > 0 {
+			item["max_output_tokens"] = m.MaxOutputTokens
+		}
 		if m.ShowThinking && len(m.ThinkingLevels) > 0 {
 			levels := make([]map[string]any, 0, len(m.ThinkingLevels))
 			for _, lv := range m.ThinkingLevels {

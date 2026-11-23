@@ -110,6 +110,12 @@
     return ((Number(part) || 0) / t * 100).toFixed(1) + '%';
   }
 
+  function fmtLevel(v) {
+    var s = String(v || '').trim();
+    if (!s) return '—';
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+
   function fmtContext(n) {
     var v = Number(n) || 0;
     if (!v) return '—';
@@ -795,6 +801,7 @@
         badges.push('<span class="tag ' + cls + '">' + esc(t.text) + '</span>');
       });
       if (m.context_length) badges.push('<span class="tag">' + esc(fmtContext(m.context_length)) + ' ctx</span>');
+      if (m.max_output_tokens) badges.push('<span class="tag">' + esc(fmtContext(m.max_output_tokens)) + ' out</span>');
       if (m.support_img) badges.push('<span class="tag">图片识别</span>');
       if (hidden.indexOf(m.id) >= 0) badges.push('<span class="tag badge-hidden">hidden</span>');
       var caps = (m.capabilities || []).map(function (c) {
@@ -803,7 +810,7 @@
       var levels = [];
       if (m.show_thinking && (m.thinking_levels || []).length) {
         (m.thinking_levels || []).forEach(function (lv) {
-          levels.push('<span class="lv' + (lv.default ? ' is-default' : '') + '">' + esc(lv.label || lv.value) + '</span>');
+          levels.push('<span class="lv' + (lv.default ? ' is-default' : '') + '" title="' + attr(lv.label || '') + '">' + esc(fmtLevel(lv.value)) + '</span>');
         });
       }
       var thinking = levels.length
@@ -826,7 +833,7 @@
 
     return '<div class="model-block">' + info + '</div>' +
       '<section class="card table-card model-block"><div class="panel-head"><h2 class="panel-title">可用模型</h2>' +
-        '<span class="panel-sub">共 ' + list.length + ' 个</span></div>' +
+        '<span class="panel-sub">共 ' + list.length + ' 个 · 上下文/最大输出为参考值，可在 config.models.metadata 覆盖</span></div>' +
         (list.length ? '<div class="model-grid" style="padding:16px">' + cards + '</div>'
           : emptyState('cpu', '暂无模型', '模型目录为空，请检查服务端配置。')) + '</section>' +
       '<section class="card table-card"><div class="panel-head"><h2 class="panel-title">别名映射</h2>' +

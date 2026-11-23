@@ -105,7 +105,10 @@
       "gpt-4o-mini": "deepseek-v4-flash",
       "claude-3-5-sonnet": "glm-5.3"
     },
-    "hidden": []
+    "hidden": [],
+    "metadata": {
+      "deepseek-v4.1-flash": { "context_length": 1000000, "max_output_tokens": 64000 }
+    }
   },
   "pool": {
     "max_in_flight": 2,

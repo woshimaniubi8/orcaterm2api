@@ -77,6 +77,12 @@ type ModelConfig struct {
 	ContextLength int `json:"context_length,omitempty"`
 }
 
+// ModelMeta 允许覆盖模型的上下文 / 最大输出（按模型 ID、显示名或 upstream 匹配）。
+type ModelMeta struct {
+	ContextLength   int `json:"context_length,omitempty"`
+	MaxOutputTokens int `json:"max_output_tokens,omitempty"`
+}
+
 type ModelsConfig struct {
 	// Enabled 是离线兜底目录（目录接口不可用时使用）。
 	Enabled []ModelConfig     `json:"enabled"`
@@ -88,6 +94,7 @@ type ModelsConfig struct {
 	Aliases map[string]string `json:"aliases"`
 	// Hidden 不出现在 /v1/models，但允许直接点名调用。
 	Hidden []string `json:"hidden"`
+	Metadata map[string]ModelMeta `json:"metadata"`
 }
 
 type PoolConfig struct {
@@ -306,6 +313,9 @@ func (c *Config) Normalize() {
 	}
 	if c.Models.Aliases == nil {
 		c.Models.Aliases = map[string]string{}
+	}
+	if c.Models.Metadata == nil {
+		c.Models.Metadata = map[string]ModelMeta{}
 	}
 	if c.Pool.MaxInFlight <= 0 {
 		c.Pool.MaxInFlight = d.Pool.MaxInFlight
