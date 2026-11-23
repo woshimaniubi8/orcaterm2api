@@ -424,6 +424,33 @@ func (g *Gateway) RefreshAccount(ctx context.Context, e *pool.Entry) error {
 	ok := false
 	defer func() { e.DoneRefreshing(ok) }()
 	a := e.Account()
+	if strings.TrimSpace(a.LoginCookie) != "" {
+		// Web 扫码账号没有 refresh token，但 ot_login Cookie 可以反复换 AccessToken。
+		tok, lerr := g.client.IssueAccessToken(ctx, a.LoginCookie)
+		if lerr == nil && tok != nil && tok.AccessToken != "" {
+			next := a
+			next.AccessToken = tok.AccessToken
+			if exp := tok.ExpiresAt(time.Now()); exp > 0 {
+				next.ExpiresAt = exp
+			} else {
+				next.ExpiresAt = time.Now().Add(2 * time.Hour).UnixMilli()
+			}
+			next.LastRefreshAt = time.Now().UnixMilli()
+			if uerr := g.pool.Update(&next); uerr != nil {
+				return uerr
+			}
+			ok = true
+			e.ClearNeedsLogin()
+			return nil
+		}
+		if lerr != nil {
+			if ae, isAuth := upstream.AsAPIError(lerr); isAuth && ae.Kind == upstream.KindAuth {
+				e.MarkNeedsLogin(lerr.Error())
+			}
+			return lerr
+		}
+		return errors.New("ot_login 未返回 AccessToken")
+	}
 	if !a.HasRefresh() {
 		e.MarkNeedsLogin("账号没有 refresh token")
 		return &upstream.APIError{Kind: upstream.KindAuth, Message: "账号没有 refresh token，请重新登录"}

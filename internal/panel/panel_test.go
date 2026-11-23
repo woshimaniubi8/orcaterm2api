@@ -40,6 +40,14 @@ func TestExtractTokenBundleFromCookie(t *testing.T) {
 	}
 }
 
+func TestExtractLoginCookie(t *testing.T) {
+	cookies := []*http.Cookie{{Name: "ot_login", Value: "login-session-token"}}
+	b := extractTokenBundle(map[string]any{"code": 0}, cookies)
+	if b.LoginCookie != "login-session-token" {
+		t.Fatalf("login cookie=%q", b.LoginCookie)
+	}
+}
+
 func TestMaskKey(t *testing.T) {
 	if got := maskKey("sk-orca-1234567890"); got != "sk-orca-...7890" {
 		t.Fatalf("mask=%q", got)

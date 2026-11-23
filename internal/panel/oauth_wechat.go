@@ -2,6 +2,7 @@ package panel
 
 import (
 	"bytes"
+	"log"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -113,6 +114,9 @@ func (p *Panel) handleWechatExchange(w http.ResponseWriter, r *http.Request) {
 	if bundle.ExpiresAt > 0 {
 		acct.ExpiresAt = bundle.ExpiresAt
 	}
+	if bundle.LoginCookie != "" {
+		acct.LoginCookie = bundle.LoginCookie
+	}
 	if bundle.Name != "" {
 		acct.Name = bundle.Name
 	}
@@ -137,10 +141,11 @@ func (p *Panel) handleWechatExchange(w http.ResponseWriter, r *http.Request) {
 }
 
 type tokenBundle struct {
-	Access    string
-	Refresh   string
-	Name      string
-	ExpiresAt int64
+	Access      string
+	Refresh     string
+	LoginCookie string
+	Name        string
+	ExpiresAt   int64
 }
 
 // exchangeWechat 用 /oauth/wechat/config 发的 state 走 Web 兑换（Set-Cookie ot_session）。
@@ -175,6 +180,12 @@ func (p *Panel) postWechatExchange(ctx context.Context, body map[string]any) (to
 	defer resp.Body.Close()
 	payload, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	debug := map[string]any{"status": resp.StatusCode}
+	cookieNames := make([]string, 0, len(resp.Cookies()))
+	for _, c := range resp.Cookies() {
+		cookieNames = append(cookieNames, c.Name)
+	}
+	debug["cookies"] = cookieNames
+	log.Printf("[wechat] exchange status=%d cookies=%v body_keys=%v", resp.StatusCode, cookieNames, debug["body_keys"])
 	var parsed any
 	if json.Unmarshal(payload, &parsed) == nil {
 		if m, ok := parsed.(map[string]any); ok {
@@ -190,7 +201,7 @@ func (p *Panel) postWechatExchange(ctx context.Context, body map[string]any) (to
 		for _, c := range resp.Cookies() {
 			if c.Name == "ot_login" && c.Value != "" {
 				if tok, ierr := p.gw.Client().IssueAccessToken(ctx, c.Value); ierr == nil {
-					bundle.Access = tok
+					bundle.Access = tok.AccessToken
 				}
 			}
 		}
@@ -223,7 +234,7 @@ func extractTokenBundle(v any, cookies []*http.Cookie) tokenBundle {
 					if s, ok := val.(string); ok && strings.Count(s, ".") == 2 {
 						out.Access = s
 					}
-				case out.Refresh == "" && (lk == "refreshtoken" || lk == "refresh_token"):
+				case out.Refresh == "" && (lk == "refreshtoken" || lk == "refresh_token" || strings.Contains(lk, "refresh")):
 					if s, ok := val.(string); ok && s != "" {
 						out.Refresh = s
 					}
@@ -253,6 +264,16 @@ func extractTokenBundle(v any, cookies []*http.Cookie) tokenBundle {
 	for _, c := range cookies {
 		if c.Name == "ot_session" && out.Access == "" && strings.Count(c.Value, ".") == 2 {
 			out.Access = c.Value
+		}
+		if c.Name == "ot_login" && out.LoginCookie == "" && c.Value != "" {
+			out.LoginCookie = c.Value
+		}
+		ln := strings.ToLower(c.Name)
+		if out.Refresh == "" && strings.Contains(ln, "refresh") && c.Value != "" {
+			out.Refresh = c.Value
+		}
+		if out.LoginCookie == "" && strings.Contains(ln, "login") && c.Value != "" {
+			out.LoginCookie = c.Value
 		}
 	}
 	return out

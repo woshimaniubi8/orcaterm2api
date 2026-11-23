@@ -21,6 +21,8 @@ type Account struct {
 	Name          string `json:"name,omitempty"`
 	AccessToken   string `json:"access_token"`
 	RefreshToken  string `json:"refresh_token,omitempty"`
+	// LoginCookie 是 Web 登录的 ot_login Cookie（可反复换 AccessToken）。
+	LoginCookie   string `json:"login_cookie,omitempty"`
 	// ExpiresAt 访问令牌过期时间（unix 毫秒）。
 	ExpiresAt     int64  `json:"expires_at"`
 	Enabled       bool   `json:"enabled"`
@@ -34,7 +36,9 @@ type Account struct {
 func (a *Account) Clone() *Account { cp := *a; return &cp }
 
 // HasRefresh 是否有刷新令牌。
-func (a *Account) HasRefresh() bool { return strings.TrimSpace(a.RefreshToken) != "" }
+func (a *Account) HasRefresh() bool {
+	return strings.TrimSpace(a.RefreshToken) != "" || strings.TrimSpace(a.LoginCookie) != ""
+}
 
 // Expired 判断访问令牌是否已过期（留 60 秒余量）。
 func (a *Account) Expired(now time.Time) bool {
@@ -59,6 +63,7 @@ func (a *Account) Masked() Account {
 	cp := *a
 	cp.AccessToken = Mask(cp.AccessToken)
 	cp.RefreshToken = Mask(cp.RefreshToken)
+	cp.LoginCookie = Mask(cp.LoginCookie)
 	return cp
 }
 
