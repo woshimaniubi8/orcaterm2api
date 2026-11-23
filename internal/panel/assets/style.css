@@ -1077,3 +1077,7 @@ table.data { width: 100%; min-width: 760px; border-collapse: collapse; font-size
 .model-price{font-size:11.5px;color:#22c55e;white-space:nowrap}
 .model-upstream{font-size:11px;color:var(--muted,#8b98a5);margin-top:auto;padding-top:8px;word-break:break-all}
 .model-card{display:flex;flex-direction:column;height:100%}
+
+.oauth-manual{margin-top:14px;padding-top:12px;border-top:1px dashed var(--line,#1f2a37)}
+.oauth-manual .copy-row{display:flex;gap:8px;margin-top:6px}
+.oauth-manual input{flex:1;min-width:0}

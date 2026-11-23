@@ -1342,15 +1342,16 @@
         var src = 'https://open.weixin.qq.com/connect/qrconnect?appid=' + encodeURIComponent(cfg.appid) +
           '&redirect_uri=' + encodeURIComponent(cfg.redirect_uri) +
           '&response_type=code&scope=' + encodeURIComponent(cfg.scope) +
-          '&state=' + encodeURIComponent(cfg.state) + '#wechat_redirect';
+          '&state=' + encodeURIComponent(cfg.state) + '&login_type=jssdk&self_redirect=true#wechat_redirect';
         box.innerHTML = '<iframe class="wx-qr-frame" width="300" height="400" frameborder="0" scrolling="no" title="微信扫码登录" src="' + attr(src) + '"></iframe>';
         setStatus('请用微信扫一扫');
         st.listener = function (ev) {
           var d = ev.data;
-          if (!d || d.type !== 'wechat-oauth-callback' || !st.state || d.state !== st.state) return;
+          if (!d || d.type !== 'wechat-oauth-callback') return;
           if (d.error) { setStatus('微信授权失败：' + d.error, 'error'); return; }
           if (!d.code) { setStatus('微信回调缺少 code', 'error'); return; }
-          exchange(d.code, st.state);
+          // 不强制 state 相等：二维码可能被刷新过，服务端会校验 code/state 是否匹配。
+          exchange(d.code, d.state || st.state);
         };
         window.addEventListener('message', st.listener);
         st.timer = setTimeout(function () {
@@ -1361,6 +1362,22 @@
       }
     }
     if (refreshBtn) refreshBtn.addEventListener('click', render);
+    var manualBtn = wrap.querySelector('#oauth-bridge-submit');
+    var manualInput = wrap.querySelector('#oauth-bridge-url');
+    if (manualBtn) {
+      manualBtn.addEventListener('click', function () {
+        var raw = (manualInput && manualInput.value || '').trim();
+        try {
+          var u = new URL(raw);
+          var code = u.searchParams.get('code');
+          var state = u.searchParams.get('state');
+          if (!code || !state) throw new Error('链接里缺少 code 或 state');
+          exchange(code, state);
+        } catch (e) {
+          setStatus(e.message || '链接格式不正确', 'error');
+        }
+      });
+    }
     render();
     return { cleanup: cleanup, render: render };
   }
@@ -1400,6 +1417,9 @@
             '<p id="orca-qr-status" class="oauth-status">正在获取微信二维码…</p>' +
             '<p class="field-hint">用微信「扫一扫」扫描上方二维码，扫码后账号会自动写入。此流程不会跳转登录页，也不会拉起桌面客户端。</p>' +
             '<button class="btn btn-sm" type="button" id="orca-qr-refresh">刷新二维码</button>' +
+            '<div class="oauth-manual"><label class="field-label" for="oauth-bridge-url">扫码后没反应？粘贴浏览器地址栏的 bridge 链接</label>' +
+              '<div class="copy-row"><input id="oauth-bridge-url" class="mono" placeholder="https://orcaterm.com/oauth/wechat/bridge?code=...&state=...">' +
+              '<button class="btn btn-sm" type="button" id="oauth-bridge-submit">完成登录</button></div></div>' +
           '</div>' +
           '<details class="oauth-fallback"><summary>备用：浏览器授权链接</summary>' +
             '<p class="field-hint">如果面板内的二维码无法显示，可生成浏览器链接（需先退出 OrcaTerm 客户端，否则深层链接会抢占登录会话）。</p>' +
@@ -1707,3 +1727,4 @@
 
   document.addEventListener('DOMContentLoaded', init);
 })();
+
