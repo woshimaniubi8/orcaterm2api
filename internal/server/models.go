@@ -7,6 +7,12 @@ import (
 )
 
 func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, x-api-key, api-key")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 	if r.Method != http.MethodGet {
 		writeOpenAIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "只支持 GET")
 		return

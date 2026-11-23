@@ -32,7 +32,10 @@ func New(cfg *config.Manager, gw *gateway.Gateway, logs *reqlog.Log) *Server {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", s.handleHealth)
-	mux.HandleFunc("/v1/models", s.withAuth(s.handleModels))
+	// /v1/models 公开：模型目录不含敏感信息，sub2api 等上游同步工具经常不带鉴权。
+	mux.HandleFunc("/v1/models", s.handleModels)
+	mux.HandleFunc("/v1/models/", s.handleModels)
+	mux.HandleFunc("/models", s.handleModels)
 	mux.HandleFunc("/v1/chat/completions", s.withAuth(s.handleChat))
 	mux.HandleFunc("/v1/messages", s.withAuth(s.handleMessages))
 	mux.HandleFunc("/v1/messages/count_tokens", s.withAuth(s.handleCountTokens))
@@ -80,13 +83,23 @@ func (s *Server) withAuth(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func extractAPIKey(r *http.Request) string {
-	if h := r.Header.Get("Authorization"); h != "" {
+	if h := strings.TrimSpace(r.Header.Get("Authorization")); h != "" {
 		if strings.HasPrefix(strings.ToLower(h), "bearer ") {
 			return strings.TrimSpace(h[7:])
 		}
+		// 兼容不带 Bearer 前缀的客户端
+		return h
 	}
-	if h := r.Header.Get("x-api-key"); h != "" {
-		return strings.TrimSpace(h)
+	for _, name := range []string{"x-api-key", "api-key", "x-auth-token", "x-goog-api-key"} {
+		if h := strings.TrimSpace(r.Header.Get(name)); h != "" {
+			return h
+		}
+	}
+	q := r.URL.Query()
+	for _, name := range []string{"api_key", "key", "token"} {
+		if v := strings.TrimSpace(q.Get(name)); v != "" {
+			return v
+		}
 	}
 	return ""
 }

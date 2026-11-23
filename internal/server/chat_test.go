@@ -230,3 +230,28 @@ func TestEstimateTokens(t *testing.T) {
 		t.Fatalf("cjk=%d", estimateTokens("你好"))
 	}
 }
+
+func TestModelsPublic(t *testing.T) {
+	srv, _ := newTestServer(t, "http://127.0.0.1:1")
+	defer srv.Close()
+	resp, err := http.Get(srv.URL + "/v1/models")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status=%d", resp.StatusCode)
+	}
+	var out struct {
+		Object string `json:"object"`
+		Data   []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	if out.Object != "list" || len(out.Data) == 0 {
+		t.Fatalf("out=%+v", out)
+	}
+}
