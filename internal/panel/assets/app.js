@@ -100,11 +100,21 @@
   }
 
   function fmtTok(n) {
-    n = Number(n) || 0;
-    if (!n) return '0';
-    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
-    if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
-    return String(n);
+    n = Number(n);
+    if (!Number.isFinite(n) || n < 0) return '—';
+    if (n < 1000) return String(Math.round(n));
+    const units = [['K', 1e3], ['M', 1e6], ['B', 1e9]];
+    let unit = units[0];
+    for (const c of units) { if (n >= c[1]) unit = c; }
+    let v = Number((n / unit[1]).toFixed(1));
+    if (v >= 1000) {
+      const i = units.findIndex(function (u) { return u[0] === unit[0]; });
+      if (i >= 0 && i < units.length - 1) {
+        unit = units[i + 1];
+        v = Number((n / unit[1]).toFixed(1));
+      }
+    }
+    return v + unit[0];
   }
 
   function fmtTps(n) {
@@ -583,6 +593,10 @@
     var total = Number(req.total) || 0;
     var success = Number(req.success) || 0;
     var errors = Number(req.errors) || 0;
+    var tokTotal = Number(req.lifetime_total_tokens || req.total_tokens) || 0;
+    var tokIn = Number(req.lifetime_prompt_tokens || req.prompt_tokens) || 0;
+    var tokOut = Number(req.lifetime_completion_tokens || req.completion_tokens) || 0;
+    var tokTps = Number(req.lifetime_avg_tps || req.avg_tps) || 0;
     var cards =
       '<article class="stat-card"><div class="stat-label">服务版本</div>' +
         '<div class="stat-value">' + esc(ov.version || '—') + '</div>' +
@@ -600,8 +614,8 @@
         '<div class="stat-value">' + esc(total ? fmtDuration(req.avg_duration_ms) : '—') + '</div>' +
         '<div class="stat-meta">平均 TTFB ' + esc(req.avg_ttfb_ms ? fmtDuration(req.avg_ttfb_ms) : '—') + '</div></article>' +
       '<article class="stat-card"><div class="stat-label">Tokens 总量</div>' +
-        '<div class="stat-value">' + fmtTok(req.total_tokens) + '</div>' +
-        '<div class="stat-meta">平均 ' + fmtTps(req.avg_tps) + ' tok/s</div></article>' +
+        '<div class="stat-value">' + fmtTok(tokTotal) + '</div>' +
+        '<div class="stat-meta">输入 ' + fmtTok(tokIn) + ' · 输出 ' + fmtTok(tokOut) + ' · ' + fmtTps(tokTps) + ' tok/s</div></article>' +
       '<article class="stat-card"><div class="stat-label">会话数</div>' +
         '<div class="stat-value">' + fmtInt(ov.conversations) + '<small>个</small></div>' +
         '<div class="stat-meta">默认模型 ' + esc(ov.default_model || '—') + '</div></article>';
@@ -612,7 +626,8 @@
         '<div class="fact"><span>流式请求</span><strong>' + fmtInt(req.streaming) + '</strong></div>' +
         '<div class="fact"><span>池请求</span><strong>' + fmtInt(ov.pool_requests) + '</strong></div>' +
         '<div class="fact"><span>池错误</span><strong>' + fmtInt(ov.pool_errors) + '</strong></div>' +
-        '<div class="fact"><span>Tokens 总量</span><strong>' + fmtTok(req.total_tokens) + '</strong></div>' +
+        '<div class="fact"><span>累计 Tokens</span><strong>' + fmtTok(tokTotal) + '</strong></div>' +
+        '<div class="fact"><span>输入 / 输出</span><strong>' + fmtTok(tokIn) + ' / ' + fmtTok(tokOut) + '</strong></div>' +
       '</div>';
 
     return '<div class="stat-grid">' + cards + '</div>' + facts +
@@ -1821,4 +1836,5 @@
 
   document.addEventListener('DOMContentLoaded', init);
 })();
+
 

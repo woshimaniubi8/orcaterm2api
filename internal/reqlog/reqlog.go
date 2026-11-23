@@ -47,7 +47,15 @@ type Stats struct {
 	AvgDuration  int64            `json:"avg_duration_ms"`
 	AvgTTFB      int64            `json:"avg_ttfb_ms"`
 	TotalTokens  int64            `json:"total_tokens"`
+	PromptTokens int64            `json:"prompt_tokens"`
+	CompletionTokens int64        `json:"completion_tokens"`
 	AvgTPS       float64          `json:"avg_tps"`
+	// 累计值（跨重启，存 data/usage.json）
+	LifetimeRequests   int64   `json:"lifetime_requests"`
+	LifetimePrompt     int64   `json:"lifetime_prompt_tokens"`
+	LifetimeCompletion int64   `json:"lifetime_completion_tokens"`
+	LifetimeTotal      int64   `json:"lifetime_total_tokens"`
+	LifetimeAvgTPS     float64 `json:"lifetime_avg_tps"`
 	ByModel      map[string]int64 `json:"by_model"`
 	ByAccount    map[string]int64 `json:"by_account"`
 	Last24h      int64            `json:"last_24h"`
@@ -63,6 +71,18 @@ type Log struct {
 	archivePath    string
 	archiveEnabled bool
 	includePrompts bool
+	usagePath      string
+	saveMu         sync.Mutex
+	life           lifetime
+}
+
+type lifetime struct {
+	Requests   int64   `json:"requests"`
+	Prompt     int64   `json:"prompt_tokens"`
+	Completion int64   `json:"completion_tokens"`
+	Total      int64   `json:"total_tokens"`
+	TPSSum     float64 `json:"tps_sum"`
+	TPSCount   int64   `json:"tps_count"`
 }
 
 // New 构造日志。
@@ -70,7 +90,16 @@ func New(size int, archivePath string, archiveEnabled, includePrompts bool) *Log
 	if size <= 0 {
 		size = 500
 	}
-	return &Log{size: size, ring: make([]Entry, size), archivePath: archivePath, archiveEnabled: archiveEnabled, includePrompts: includePrompts}
+	l := &Log{size: size, ring: make([]Entry, size), archivePath: archivePath, archiveEnabled: archiveEnabled, includePrompts: includePrompts}
+	if archivePath != "" {
+		dir := filepath.Dir(archivePath)
+		if dir == "" || dir == "." {
+			dir = "."
+		}
+		l.usagePath = filepath.Join(dir, "usage.json")
+		l.loadUsage()
+	}
+	return l
 }
 
 // Add 写入一条记录。
@@ -88,7 +117,16 @@ func (l *Log) Add(e Entry) {
 	if l.next == 0 {
 		l.full = true
 	}
+	l.life.Requests++
+	l.life.Prompt += int64(e.PromptTokens)
+	l.life.Completion += int64(e.CompletionTokens)
+	l.life.Total += int64(e.TotalTokens)
+	if e.TokensPerSecond > 0 {
+		l.life.TPSSum += e.TokensPerSecond
+		l.life.TPSCount++
+	}
 	l.mu.Unlock()
+	l.saveUsage()
 	if l.archiveEnabled && l.archivePath != "" {
 		l.archive(e)
 	}
@@ -169,6 +207,8 @@ func (l *Log) Stats() Stats {
 		dur += e.DurationMS
 		ttfb += e.TTFBMS
 		tokens += int64(e.TotalTokens)
+		s.PromptTokens += int64(e.PromptTokens)
+		s.CompletionTokens += int64(e.CompletionTokens)
 		if e.TokensPerSecond > 0 {
 			tpsSum += e.TokensPerSecond
 			tpsCount++
@@ -191,5 +231,42 @@ func (l *Log) Stats() Stats {
 	if tpsCount > 0 {
 		s.AvgTPS = tpsSum / float64(tpsCount)
 	}
+	s.LifetimeRequests = l.life.Requests
+	s.LifetimePrompt = l.life.Prompt
+	s.LifetimeCompletion = l.life.Completion
+	s.LifetimeTotal = l.life.Total
+	if l.life.TPSCount > 0 {
+		s.LifetimeAvgTPS = l.life.TPSSum / float64(l.life.TPSCount)
+	}
 	return s
+}
+
+func (l *Log) loadUsage() {
+	if l.usagePath == "" {
+		return
+	}
+	b, err := os.ReadFile(l.usagePath)
+	if err != nil {
+		return
+	}
+	_ = json.Unmarshal(b, &l.life)
+}
+
+func (l *Log) saveUsage() {
+	if l.usagePath == "" {
+		return
+	}
+	l.mu.RLock()
+	snapshot := l.life
+	l.mu.RUnlock()
+	l.saveMu.Lock()
+	defer l.saveMu.Unlock()
+	b, err := json.MarshalIndent(snapshot, "", "  ")
+	if err != nil {
+		return
+	}
+	tmp := l.usagePath + ".tmp"
+	if err := os.WriteFile(tmp, b, 0o640); err == nil {
+		_ = os.Rename(tmp, l.usagePath)
+	}
 }
