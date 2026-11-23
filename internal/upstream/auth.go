@@ -224,3 +224,42 @@ func truncate(s string, n int) string {
 }
 
 
+
+// IssueAccessToken 用 Web 登录 Cookie（ot_login）换 AccessToken。
+func (c *Client) IssueAccessToken(ctx context.Context, loginCookie string) (string, error) {
+	cfg := c.Config()
+	body, _ := json.Marshal(map[string]any{"action": "OAuthIssueAccessToken", "data": map[string]any{}})
+	u := fmt.Sprintf("%s?action=OAuthIssueAccessToken&uin=&ownerUin=", cfg.CGIBase)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("X-Product", cfg.Product)
+	req.Header.Set("Cookie", "ot_login="+loginCookie)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return "", &APIError{Kind: KindNetwork, Message: err.Error()}
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	var env struct {
+		Data struct {
+			Response struct {
+				AccessToken string `json:"AccessToken"`
+				Error       *cgiError `json:"Error"`
+			} `json:"Response"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &env); err != nil {
+		return "", &APIError{Kind: KindProvider, Message: "IssueAccessToken 解析失败: " + err.Error()}
+	}
+	if env.Data.Response.Error != nil {
+		return "", &APIError{Kind: cgiErrorKind(env.Data.Response.Error.Code), Code: env.Data.Response.Error.Code, Message: env.Data.Response.Error.Message}
+	}
+	if env.Data.Response.AccessToken == "" {
+		return "", &APIError{Kind: KindAuth, Message: "IssueAccessToken 未返回 AccessToken"}
+	}
+	return env.Data.Response.AccessToken, nil
+}

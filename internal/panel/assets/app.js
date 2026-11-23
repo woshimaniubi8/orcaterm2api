@@ -1292,16 +1292,14 @@
     statusEl.className = 'oauth-status warn';
   }
 
-  // loadWechatQR 在面板内直接渲染微信二维码并轮询扫码结果。
-  // 二维码来自 /oauth/authorize 的 302（open.weixin.qq.com/qrconnect），
-  // 扫码后服务端会话即被授权，这里用 /api/oauth/poll 直接兑换令牌，
-  // 所以浏览器提示「打开 OrcaTerm 客户端」与面板无关，可以忽略。
+  // loadWechatQR 在面板内渲染微信二维码：走 Web 扫码流程（/oauth/wechat/config + bridge 回调），
+  // 不会跳转 orcaterm.com/login，也不会拉起桌面客户端，扫码后由 bridge 页 postMessage 回传 code。
   function loadWechatQR(wrap, close) {
     var box = wrap.querySelector('#orca-qr');
     var statusEl = wrap.querySelector('#orca-qr-status');
     var refreshBtn = wrap.querySelector('#orca-qr-refresh');
     if (!box || !statusEl) return;
-    var st = { sessionId: null, done: false, timer: null };
+    var st = { state: null, done: false, timer: null, listener: null };
 
     function setStatus(text, kind) {
       statusEl.textContent = text;
@@ -1310,36 +1308,27 @@
     function cleanup() {
       st.done = true;
       if (st.timer) clearTimeout(st.timer);
+      if (st.listener) window.removeEventListener('message', st.listener);
       st.timer = null;
+      st.listener = null;
     }
-    async function poll(sessionId) {
-      var failures = 0;
-      for (var i = 0; i < 150; i++) {
-        await new Promise(function (r) { setTimeout(r, 2000); });
-        if (st.done || !statusEl.isConnected) return;
-        try {
-          var res = await api('oauth/poll', { method: 'POST', body: { session_id: sessionId } });
-          failures = 0;
-          if (res.status === 'ok') {
-            st.done = true;
-            setStatus('登录成功，账号已添加', 'ok');
-            toast('微信账号已添加' + (res.account && res.account.name ? '：' + res.account.name : ''), 'success');
-            setTimeout(function () { close(); go('accounts'); }, 700);
-            return;
-          }
-          if (res.status === 'expired') {
-            setStatus('二维码已过期，请点「刷新二维码」', 'warn');
-            return;
-          }
-        } catch (err) {
-          failures++;
-          if (failures >= 5) {
-            setStatus(err.message || '轮询扫码结果失败', 'error');
-            return;
-          }
+    async function exchange(code, state) {
+      if (st.done) return;
+      setStatus('已扫码，正在登录…');
+      try {
+        var res = await api('oauth/wechat/exchange', { method: 'POST', body: { code: code, state: state } });
+        cleanup();
+        setStatus('登录成功，账号已添加', 'ok');
+        if (res.has_refresh) {
+          toast('微信账号已添加' + (res.account && res.account.name ? '：' + res.account.name : ''), 'success');
+        } else {
+          toast('微信账号已添加（无 refresh token，约 2 小时有效；可改用「备用：桌面授权链接」获取可刷新账号）', 'warn', 7000);
         }
+        setTimeout(function () { close(); go('accounts'); }, 800);
+      } catch (err) {
+        setStatus(err.message || '微信登录失败', 'error');
+        toast(err.message || '微信登录失败', 'error');
       }
-      setStatus('等待超时，请刷新二维码', 'warn');
     }
     async function render() {
       cleanup();
@@ -1347,16 +1336,26 @@
       box.innerHTML = '<span class="spinner"></span>';
       setStatus('正在获取微信二维码…');
       try {
-        var res = await api('oauth/start', { method: 'POST', body: {} });
+        var cfg = await api('oauth/wechat/config');
         if (st.done || !box.isConnected) return;
-        if (!res.qr_url) {
-          setStatus('未能解析微信二维码，请使用下方「备用：浏览器授权链接」', 'warn');
-          return;
-        }
-        st.sessionId = res.session_id;
-        box.innerHTML = '<iframe class="wx-qr-frame" width="300" height="400" frameborder="0" scrolling="no" title="微信扫码登录" src="' + attr(res.qr_url) + '"></iframe>';
+        st.state = cfg.state;
+        var src = 'https://open.weixin.qq.com/connect/qrconnect?appid=' + encodeURIComponent(cfg.appid) +
+          '&redirect_uri=' + encodeURIComponent(cfg.redirect_uri) +
+          '&response_type=code&scope=' + encodeURIComponent(cfg.scope) +
+          '&state=' + encodeURIComponent(cfg.state) + '#wechat_redirect';
+        box.innerHTML = '<iframe class="wx-qr-frame" width="300" height="400" frameborder="0" scrolling="no" title="微信扫码登录" src="' + attr(src) + '"></iframe>';
         setStatus('请用微信扫一扫');
-        poll(res.session_id);
+        st.listener = function (ev) {
+          var d = ev.data;
+          if (!d || d.type !== 'wechat-oauth-callback' || !st.state || d.state !== st.state) return;
+          if (d.error) { setStatus('微信授权失败：' + d.error, 'error'); return; }
+          if (!d.code) { setStatus('微信回调缺少 code', 'error'); return; }
+          exchange(d.code, st.state);
+        };
+        window.addEventListener('message', st.listener);
+        st.timer = setTimeout(function () {
+          if (!st.done) setStatus('二维码可能已过期，请点「刷新二维码」', 'warn');
+        }, 290000);
       } catch (err) {
         setStatus(err.message || '二维码加载失败，请重试', 'error');
       }
@@ -1399,11 +1398,11 @@
           '<div class="oauth-box">' +
             '<div id="orca-qr" class="orca-qr"><span class="spinner"></span></div>' +
             '<p id="orca-qr-status" class="oauth-status">正在获取微信二维码…</p>' +
-            '<p class="field-hint">用微信「扫一扫」扫描上方二维码。扫码成功后账号会自动写入；浏览器若提示打开 OrcaTerm 客户端，忽略即可。</p>' +
+            '<p class="field-hint">用微信「扫一扫」扫描上方二维码，扫码后账号会自动写入。此流程不会跳转登录页，也不会拉起桌面客户端。</p>' +
             '<button class="btn btn-sm" type="button" id="orca-qr-refresh">刷新二维码</button>' +
           '</div>' +
           '<details class="oauth-fallback"><summary>备用：浏览器授权链接</summary>' +
-            '<p class="field-hint">如果面板内的二维码无法显示，可生成浏览器链接；扫码完成后本页会自动轮询结果。</p>' +
+            '<p class="field-hint">如果面板内的二维码无法显示，可生成浏览器链接（需先退出 OrcaTerm 客户端，否则深层链接会抢占登录会话）。</p>' +
             '<button class="btn btn-sm" type="button" id="oauth-link-btn">生成链接</button>' +
             '<div id="oauth-result"></div>' +
           '</details>' +

@@ -186,6 +186,15 @@ func (p *Panel) postWechatExchange(ctx context.Context, body map[string]any) (to
 		}
 	}
 	bundle := extractTokenBundle(parsed, resp.Cookies())
+	if bundle.Access == "" {
+		for _, c := range resp.Cookies() {
+			if c.Name == "ot_login" && c.Value != "" {
+				if tok, ierr := p.gw.Client().IssueAccessToken(ctx, c.Value); ierr == nil {
+					bundle.Access = tok
+				}
+			}
+		}
+	}
 	if resp.StatusCode != 200 {
 		msg := strings.TrimSpace(string(payload))
 		var e struct {
